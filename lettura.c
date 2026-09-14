@@ -2,6 +2,13 @@
 #include <stdlib.h>
 #include "strutture.h"
 #include <dirent.h>
+#include <string.h>
+char path[255];if(list->prev==NULL && v_caratteristico[l] > 0){
+  list->occorrenze=v_caratteristico[l];
+  list->value = l;
+
+
+
 
 int dimensione_file(FILE* file){
 
@@ -18,19 +25,69 @@ int dimensione_file(FILE* file){
   return v_dimensione_file;
 }
 
-char* k_lettura_file(int k, FILE* g,long long d){
+//comprime il file in k versioni di HUFFMAN trees inizio: (numero di k)(lunghezza file)(coda)(file codificato)(...)(coda)(file)
+char* k_lettura_file(int k,FILE* file,long long d){
+
 
     unsigned char v_caratteristico[d/k];
     unsigned char c;
-    FILE* out = fopen("risultato/compresso/*.*","rb");
 
-    for(int j = 0; j < k; j++){
-      for (unsigned int i = 0; i < d/k;i ++){
-        v_caratteristico[c]++;
+
+      int l = 0;
+      CODA_PRIORITA *list = malloc(sizeof(CODA_PRIORITA));
+      list->next=NULL;
+      list->prev=NULL;
+
+      while (l <= 255) {
+        //caso iniziale
+        if  (list->prev==NULL && v_caratteristico[l] > 0 && list->next==NULL) {
+          list->occorrenze=v_caratteristico[l];
+          list->value = l++;
+        }
+        //ciclo in avanti
+        while (v_caratteristico[l]>0 && v_caratteristico[l] < list->occorrenze) {
+            if(list->next==NULL){
+              CODA_PRIORITA* aus = malloc(sizeof(CODA_PRIORITA));
+              aus->occorrenze = v_caratteristico[l];
+              aus->value = l;
+              aus->next = NULL;
+              aus->prev = list;
+              list->next = aus;
+
+            }else{
+              list=list->next;
+
+            }
+        }
+        //ciclo all'indietro'
+        while (v_caratteristico[l]>0 && v_caratteristico[l] > list->occorrenze) {
+          if(list->prev==NULL){
+            CODA_PRIORITA* aus = malloc(sizeof(CODA_PRIORITA));
+            aus->occorrenze = v_caratteristico[l];
+            aus->value = l;
+            aus->next = list;
+            aus->prev = NULL;
+            list->prev = aus;
+          }else{
+            list=list->prev;
+
+          }
+        }
+        l++;
 
       }
+      while (list->next!=NULL) list=list->next;//torna a capo
       //inserimento in ordine(lista)
+      NODO* nodo=malloc(sizeof(NODO));
 
+      while(list->prec!=NULL){
+        nodo->left = list;
+        list->bit = 0;
+        list=list->prev;
+        nodo->right = list;
+        list = list -> prev;
+
+      }
       //NODO* radice = codifica_HUFFMAN(CODA_PRIORITA* lista);
 
       //codifica HUFFman   O(n)

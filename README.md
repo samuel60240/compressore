@@ -38,3 +38,12 @@ Continuo la ricerca finche non vi è una divisione del file con valore inferiore
 Applico la divisione a file F di dimensione D > m , dove m sara un valore che verra determinato in base al valore 
 medio della grandezza dei file e limitato in funzione di quest'ultima per evitare un sovraprocessamento del file.
 
+
+# Applicazione dell'algoritmo base
+
+Il file bersaglio dovra essere insierito un un'apposita cartella designata come punto di recupero dei file da comprimere,
+il nome della cartella è "Cestino_compressore".
+Il file compresso si trovera successivamente collocato in una cartella designata col nome "risultato".
+Nell'analogo modo il file da decomrprimere dovra essere inserito nell'apposita cartella denominata "Cestino_decompressore".
+
+

@@ -14,4 +14,6 @@ typedef struct CODA_PRIORITA{
     unsigned char value;
     unsigned char occorrenze;
     struct CODA_PRIORITA* next;
+    struct CODA_PRIORITA* prev;
+
 }CODA_PRIORITA;
