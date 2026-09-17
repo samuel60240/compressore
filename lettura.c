@@ -1,7 +1,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <dirent.h>
 #include <string.h>
 #include "strutture.h"
 
@@ -21,16 +20,14 @@ int dimensione_file(FILE* file) {
 
 
 void* k_lettura_file(int k) {
-  // NOTA: "Cestino_compressore/*.*" non è supportato da fopen ANSI C standard.
-  // Specifica il nome esatto del file da aprire.
-  FILE* file_in = fopen("Cestino_compressore/input.bin", "rb");
-
+  printf("funziono1\n");
+  FILE* file_in = fopen("Cestino_compressore/proton-recovery-phrase.pdf", "rb");
   if (file_in == NULL) {
     perror("Errore d'apertura file input");
     return NULL;
   }
-
-  FILE* file_out = fopen("risultato/file_compresoo.txt", "wb");
+  printf("funziono2\n");
+  FILE* file_out = fopen("risultato/compresso/file_compresoo.txt", "wb");
   if (file_out == NULL) {
     perror("Errore d'apertura file output!");
     fclose(file_in);
@@ -38,108 +35,103 @@ void* k_lettura_file(int k) {
   }
 
   int d_file = dimensione_file(file_in);
+  int dimensione_blocco = d_file / k;
   int repeat = 0;
 
   while (repeat < k) {
-    // Dimensione corretta a 256 per coprire tutti i valori unsigned char (0-255)
-    unsigned char v_caratteristico[256] = {0};
+      printf("funziono%d\n",repeat);
+    int v_caratteristico[256] = {0};
 
-    int l = 0;
+    long offset_inizio = (long)repeat * dimensione_blocco;
+    long limite_blocco = (repeat == k - 1) ? d_file : (offset_inizio + dimensione_blocco);
+    int byte_da_leggere = limite_blocco - offset_inizio;
 
-    CODA_PRIORITA *list = malloc(sizeof(CODA_PRIORITA));
-    if (list == NULL) {
-      perror("Errore allocazione memoria");
-      break;
-    }
-    list->next = NULL;
-    list->prev = NULL;
-    CODA_PRIORITA *radice = NULL;
-
-    while (l <= 255) {
-      if (list->prev == NULL && v_caratteristico[l] > 0 && list->next == NULL) {
-        list->occorrenze = v_caratteristico[l];
-        list->value = l;
-      }
-
-      // Ciclo in avanti
-      while (v_caratteristico[l] > 0 && v_caratteristico[l] < list->occorrenze) {
-        if (list->next == NULL) {
-          CODA_PRIORITA* aus = malloc(sizeof(CODA_PRIORITA));
-          aus->occorrenze = v_caratteristico[l];
-          aus->value = l;
-          aus->next = NULL;
-          aus->prev = list;
-          list->next = aus;
-        } else {
-          list = list->next;
-        }
-      }
-
-      // Ciclo all'indietro
-      while (v_caratteristico[l] > 0 && v_caratteristico[l] > list->occorrenze) {
-        if (list->prev == NULL) {
-          CODA_PRIORITA* aus = malloc(sizeof(CODA_PRIORITA));
-          aus->occorrenze = v_caratteristico[l];
-          aus->value = l;
-          aus->next = list;
-          aus->prev = NULL;
-          list->prev = aus;
-        } else {
-          list = list->prev;
-        }
-      }
-      l++;
-
-      while (list->next != NULL) list = list->next; // Torna alla fine
-
-      // Inserimento in ordine
-      CODA_PRIORITA* nodo = malloc(sizeof(CODA_PRIORITA));
-      if (list != NULL) {
-        nodo->left = list;
-        list->leaf = true;
-        list->bit = false;
-
-        if (list->prev != NULL) {
-          list = list->prev;
-          nodo->right = list;
-          list->leaf = true;
-          list->bit = true;
-          nodo->leaf = false;
-          nodo->value = 0;
-          nodo->occorrenze = nodo->left->occorrenze + nodo->right->occorrenze;
-        }
-      }
-
-      // Implementazione Huffman
-      while (list->prev != NULL) {
-        list = list->prev;
-        if (list->occorrenze > nodo->occorrenze) {
-          CODA_PRIORITA* aus = malloc(sizeof(CODA_PRIORITA));
-          aus->right = list;
-          list->leaf = true;
-          list->bit = true;
-          aus->left = nodo;
-          nodo->bit = false;
-          aus->occorrenze = nodo->occorrenze + list->occorrenze;
-          aus->leaf = false;
-          nodo = aus;
-        } else {
-          CODA_PRIORITA* aus = malloc(sizeof(CODA_PRIORITA));
-          aus->left = list;
-          list->leaf = true;
-          list->bit = false;
-          aus->right = nodo;
-          nodo->bit = true;
-          aus->occorrenze = nodo->occorrenze + list->occorrenze;
-          aus->leaf = false;
-          nodo = aus;
-        }
-      }
-      radice = nodo;
+    // 1. Posizionamento e conteggio frequenze nel blocco corrente
+    fseek(file_in, offset_inizio, SEEK_SET);
+    int ch;
+    while (ftell(file_in) < limite_blocco && (ch = fgetc(file_in)) != EOF) {
+      v_caratteristico[(unsigned char)ch]++;
     }
 
-    // Conversione e scrittura del blocco
-    buffer_converter(radice, (d_file + k - 1) / k, file_in, file_out);
+    // 2. Creazione della lista ordinata (coda di priorità)
+    CODA_PRIORITA *testa = NULL;
+    for (int l = 0; l < 256; l++) {
+      if (v_caratteristico[l] > 0) {
+        CODA_PRIORITA* nuovo = malloc(sizeof(CODA_PRIORITA));
+        nuovo->value = (unsigned char)l;
+        nuovo->occorrenze = v_caratteristico[l];
+        nuovo->leaf = true;
+        nuovo->left = NULL;
+        nuovo->right = NULL;
+        nuovo->next = NULL;
+        nuovo->prev = NULL;
+
+        // Inserimento ordinato per occorrenze
+        if (testa == NULL || nuovo->occorrenze < testa->occorrenze) {
+          nuovo->next = testa;
+          if (testa) testa->prev = nuovo;
+          testa = nuovo;
+        } else {
+          CODA_PRIORITA* curr = testa;
+          while (curr->next != NULL && curr->next->occorrenze <= nuovo->occorrenze) {
+            curr = curr->next;
+          }
+          nuovo->next = curr->next;
+          if (curr->next) curr->next->prev = nuovo;
+          curr->next = nuovo;
+          nuovo->prev = curr;
+        }
+      }
+    }
+
+    if (testa == NULL) {
+      repeat++;
+      continue;
+    }
+
+    // 3. Costruzione dell'albero di Huffman
+    while (testa != NULL && testa->next != NULL) {
+      CODA_PRIORITA* primo = testa;
+      CODA_PRIORITA* secondo = testa->next;
+
+      testa = secondo->next;
+      if (testa) testa->prev = NULL;
+
+      CODA_PRIORITA* padre = malloc(sizeof(CODA_PRIORITA));
+      padre->value = 0;
+      padre->occorrenze = primo->occorrenze + secondo->occorrenze;
+      padre->leaf = false;
+      padre->left = primo;
+      padre->right = secondo;
+
+      primo->bit = 0;
+      secondo->bit = 1;
+
+      // Inserimento del padre nella coda mantenendo l'ordine
+      if (testa == NULL || padre->occorrenze < testa->occorrenze) {
+        padre->next = testa;
+        if (testa) testa->prev = padre;
+        testa = padre;
+      } else {
+        CODA_PRIORITA* curr = testa;
+        while (curr->next != NULL && curr->next->occorrenze <= padre->occorrenze) {
+          curr = curr->next;
+        }
+        padre->next = curr->next;
+        if (curr->next) curr->next->prev = padre;
+        curr->next = padre;
+        padre->prev = curr;
+      }
+    }
+
+    CODA_PRIORITA* radice = testa;
+
+    // 4. Ripristino posizione file all'inizio del blocco per la codifica
+    fseek(file_in, offset_inizio, SEEK_SET);
+
+    // 5. Conversione e scrittura del blocco
+    buffer_converter(radice, byte_da_leggere, file_in, file_out);
+
     repeat++;
   }
 
@@ -149,58 +141,83 @@ void* k_lettura_file(int k) {
 }
 
 
+// Esplorazione ricorsiva dell'albero per trovare il codice
+static bool trova_codice(CODA_PRIORITA* nodo, unsigned char codice, unsigned char *bit_seq, int *profondita) {
+  if (nodo == NULL) return false;
+
+  if (nodo->leaf && nodo->value == codice) {
+    return true;
+  }
+
+  if (nodo->left) {
+    *bit_seq = (*bit_seq << 1) | 0;
+    (*profondita)++;
+    if (trova_codice(nodo->left, codice, bit_seq, profondita)) return true;
+    *bit_seq >>= 1;
+    (*profondita)--;
+  }
+
+  if (nodo->right) {
+    *bit_seq = (*bit_seq << 1) | 1;
+    (*profondita)++;
+    if (trova_codice(nodo->right, codice, bit_seq, profondita)) return true;
+    *bit_seq >>= 1;
+    (*profondita)--;
+  }
+
+  return false;
+}
+
+
 unsigned char esplorazione(CODA_PRIORITA* nodo, unsigned char codice, int *profondita) {
   unsigned char exit = 0;
   *profondita = 0;
-
-  while (nodo->right->value != codice && nodo->left->value != codice) {
-    if (nodo->right->leaf == true) {
-      exit = (exit << 1) | nodo->left->bit;
-    } else {
-      exit = (exit << 1) | nodo->right->bit;
-    }
-    (*profondita)++;
+  trova_codice(nodo, codice, &exit, profondita);
+  if (*profondita < 8) {
+    exit <<= (8 - *profondita);
   }
-  exit = (exit << (7 - *profondita));
   return exit;
 }
 
 
 void *buffer_converter(CODA_PRIORITA *albero, int d, FILE *in, FILE *out) {
-  CODA_PRIORITA* copia = albero;
-  unsigned char bytes[d];
-  unsigned char byte_out[d]; // Dimensione esatta d (senza +1 per '\0')
-  size_t bytes_letti = 0;
+  if (d <= 0 || albero == NULL) return NULL;
 
+  unsigned char *bytes = malloc(d);
+  unsigned char *byte_out = malloc(d);
+  if (!bytes || !byte_out) {
+    free(bytes);
+    free(byte_out);
+    return NULL;
+  }
+
+  memset(byte_out, 0, d);
+
+  size_t bytes_letti = fread(bytes, 1, d, in);
   int j = 0;
   int bit_liberi = 8;
 
-  // Azzera il primo byte di output
-  if (d > 0) byte_out[0] = 0;
+  for (size_t i = 0; i < bytes_letti; i++) {
+    int m = 0;
+    unsigned char exit = esplorazione(albero, bytes[i], &m);
 
-  while ((bytes_letti = fread(bytes, 1, d, in)) > 0) {
-    for (int i = 0; i < bytes_letti; i++) {
-      int m = 0;
-      unsigned char exit = esplorazione(copia, bytes[i], &m);
+    while (m > 0) {
+      byte_out[j] |= (exit >> (8 - bit_liberi));
 
-      while (m > 0) {
-        byte_out[j] |= (exit >> (8 - bit_liberi));
+      if (m >= bit_liberi) {
+        exit <<= bit_liberi;
+        m -= bit_liberi;
+        j++;
+        bit_liberi = 8;
 
-        if (m >= bit_liberi) {
-          exit <<= bit_liberi;
-          m -= bit_liberi;
-          j++;
-          bit_liberi = 8;
-
-          if (j == d) {
-            fwrite(byte_out, 1, d, out);
-            j = 0;
-          }
-          byte_out[j] = 0; // Azzera la nuova cella del buffer
-        } else {
-          bit_liberi -= m;
-          m = 0;
+        if (j == d) {
+          fwrite(byte_out, 1, d, out);
+          j = 0;
         }
+        if (j < d) byte_out[j] = 0;
+      } else {
+        bit_liberi -= m;
+        m = 0;
       }
     }
   }
@@ -210,11 +227,12 @@ void *buffer_converter(CODA_PRIORITA *albero, int d, FILE *in, FILE *out) {
     if (bit_liberi < 8) {
       unsigned char maschera = (unsigned char)(0xFF << bit_liberi);
       byte_out[j] &= maschera;
-      j++; // Include l'ultimo byte parziale nel totale da scrivere
+      j++;
     }
-
     fwrite(byte_out, 1, j, out);
   }
 
+  free(bytes);
+  free(byte_out);
   return NULL;
 }
